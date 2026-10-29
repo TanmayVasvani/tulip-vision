@@ -1,0 +1,14 @@
+# Tulip Vision — Python 3.10+
+#
+# Windows: `pip install -r requirements.txt` installs the CPU build of torch.
+# Linux:   install the CPU build first to skip ~2.5 GB of CUDA libraries:
+#          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+numpy>=1.26
+pillow>=10.0
+pyyaml>=6.0
+flask>=3.0
+waitress>=3.0
+opencv-python>=4.9     # camera access; on a display-less Linux box use opencv-python-headless
+torch>=2.2
+torchvision>=0.17
+pytest>=8.0            # tests only

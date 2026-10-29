@@ -1,0 +1,40 @@
+# Tulip Vision configuration. Relative paths are relative to this file.
+
+server:
+  host: 0.0.0.0          # reachable from phones and tablets on the factory LAN
+  port: 8600
+  threads: 8
+
+data_root: data          # datasets:  data/<sku>/{good, defect, classes, feedback}
+models_root: models      # versions:  models/<sku>/<version>/ + CURRENT
+serve_data: serve/data   # audit log (SQLite) + inspection evidence images
+
+storage:
+  keep_days: 60          # evidence images older than this are deleted
+                         # (operator-labelled ones are already copied into data/)
+
+camera:
+  # 0, 1, ...                           USB webcam, or a phone running a webcam app
+  # "folder:data/demo_synthetic/stream" replay images: demo without hardware
+  # null                                no camera: the operator UI takes photo uploads
+  source: 0
+  width: 1280
+  height: 720
+  backend: auto          # Windows: try "dshow" if the camera opens slowly
+  settle_ms: 250         # pause after Inspect so the operator's hand leaves the frame
+  jpeg_quality: 92       # identical for capture and inspection (no train/serve skew)
+  fps: 15
+  lock: {}               # best effort, camera-dependent. Example:
+                         # {autofocus: 0, focus: 40, auto_exposure: 1, exposure: -6, auto_wb: 0, wb_temperature: 4600}
+
+skus:
+  zecta_classic:
+    display_name: "Zecta Classic"
+    defect_types: [missing_tuft, stray_bristle, uneven_trim, contamination, other]
+  demo_synthetic:
+    display_name: "Demo (synthetic)"
+    defect_types: [missing_tuft, sparse_tuft, splayed_tuft, stray_bristle, contamination, other]
+
+# Optional: rename or add operator-facing defect names (Gujarati first)
+# defect_labels:
+#   uneven_trim: {gu: "અસમાન ટ્રિમિંગ", en: "Uneven trim"}

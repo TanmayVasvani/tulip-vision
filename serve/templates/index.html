@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="gu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tulip Vision · ગુણવત્તા તપાસ</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23182019'/%3E%3Cpath d='M9 16.5l4.5 4.5L23 11' stroke='%2350C77D' stroke-width='3.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --paper:#EDF0EC; --card:#F8FAF7; --ink:#182019; --mut:#59635A; --line:#C3CBC2;
+    --pass:#0B7A3B; --reject:#BE1F2C; --idle:#6B6F68; --amber:#C98A00; --unrec:#94600A; --focus:#B87400;
+    --guj:'Nirmala UI','Noto Sans Gujarati','Shruti','Gujarati Sangam MN',system-ui,sans-serif;
+    --mono:ui-monospace,'Cascadia Mono',Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0}
+  html,body{background:var(--paper)}
+  body{color:var(--ink);font-family:var(--guj);min-height:100vh}
+  button,select,input{font-family:inherit}
+  button{cursor:pointer}
+  :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+  small,.en{font-family:system-ui,sans-serif}
+  [hidden]{display:none!important}
+
+  header{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:12px 18px;border-bottom:2px solid var(--ink)}
+  .brand{font-size:17px;font-weight:800;letter-spacing:.06em;white-space:nowrap}
+  .brand span{color:var(--mut);font-weight:500;letter-spacing:0}
+  select{font-size:15px;padding:7px 10px;border:1.5px solid var(--ink);background:var(--card);border-radius:5px;color:var(--ink)}
+  .tabs{display:inline-flex;border:1.5px solid var(--ink);border-radius:6px;overflow:hidden}
+  .tabs button{border:0;background:var(--card);color:var(--ink);font-size:15px;padding:7px 14px}
+  .tabs button[aria-selected="true"]{background:var(--ink);color:var(--paper)}
+  #today{margin-left:auto;font-family:var(--mono);font-size:12.5px;color:var(--mut);white-space:nowrap}
+
+  /* desktop: buttons stack in the left column, the verdict owns the right */
+  main{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);
+       grid-template-areas:"cam result" "fb result" "foot foot";
+       align-items:start;gap:16px;padding:16px 18px;max-width:1240px;margin:0 auto}
+  @media(max-width:880px){main{grid-template-columns:1fr;grid-template-areas:"cam" "result" "fb" "foot"}}
+  .cam{grid-area:cam} #resultPane,#dsPane{grid-area:result} #fbPane{grid-area:fb} .foot{grid-area:foot}
+  .card{background:var(--card);border:1.5px solid var(--line);border-radius:8px;padding:14px}
+
+  /* live camera */
+  .cam{display:flex;flex-direction:column;gap:12px}
+  .frame{position:relative;background:#0d110e;border-radius:6px;overflow:hidden;aspect-ratio:var(--ar,16/9)}
+  .frame img{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;display:block}
+  .roi{position:absolute;border:2.5px solid var(--amber);border-radius:3px;box-shadow:0 0 0 2000px rgba(0,0,0,.28);pointer-events:none;display:none}
+  .frame .msg{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:#d8ddd6;text-align:center;padding:18px;font-size:15px;background:#0d110e}
+  .frame.nocam .msg{display:flex}
+  .frame.nocam .roi{display:none!important}
+  .pick{position:relative;display:flex;align-items:center;justify-content:center;gap:10px;border:2px dashed var(--ink);border-radius:7px;padding:12px;font-size:17px;font-weight:700;cursor:pointer;background:var(--card)}
+  .pick input{position:absolute;inset:0;opacity:0;cursor:pointer}
+  .pick small{font-weight:500;color:var(--mut);font-size:13px}
+  .pick:focus-within{outline:3px solid var(--focus);outline-offset:2px}
+  .big{width:100%;font-size:22px;font-weight:800;padding:16px;border:none;border-radius:7px;background:var(--ink);color:var(--paper);display:flex;align-items:baseline;justify-content:center;gap:10px}
+  .big small{font-size:13px;font-weight:500;opacity:.8}
+  .big:disabled{opacity:.45;cursor:wait}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .row>.big{flex:1;width:auto;flex-direction:column;align-items:center;gap:3px;font-size:20px}
+  .big.good{background:var(--pass)} .big.bad{background:var(--reject)}
+  .hint{font-size:14px;color:var(--mut);line-height:1.45}
+  .hint small{display:block;font-size:12.5px}
+
+  /* verdict slab — readable from across the line */
+  .slab{border-radius:8px;background:var(--idle);color:#fff;display:flex;flex-direction:column;align-items:center;
+        justify-content:center;min-height:150px;padding:14px;text-align:center;transition:background-color .14s ease}
+  .slab.pass{background:var(--pass)} .slab.reject{background:var(--reject)} .slab.unrecognised{background:var(--unrec)}
+  .slab .word{font-size:clamp(48px,8vw,92px);font-weight:800;line-height:1.05}
+  .slab.unrecognised .word{font-size:clamp(34px,5.4vw,62px)}
+  .slab .sub{font-size:14px;letter-spacing:.3em;opacity:.9;margin-top:4px;font-family:system-ui,sans-serif}
+  .slab .why{font-size:15px;margin-top:8px;display:none}
+  .slab.unrecognised .why{display:block}
+
+  /* go / no-go gauge: score against the limit */
+  .gauge{margin-top:12px}
+  .gauge .track{position:relative;height:14px;border-radius:7px;background:#dfe4de;overflow:hidden}
+  .gauge .fill{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--idle);transition:width .25s ease}
+  .gauge .limit{position:absolute;left:50%;top:-4px;bottom:-4px;width:3px;background:var(--ink)}
+  .gauge .labels{display:flex;justify-content:space-between;font-family:var(--mono);font-size:12px;color:var(--mut);margin-top:5px}
+  .result{display:flex;flex-direction:column}
+  .heatwrap{margin-top:12px;display:none}
+  .heatwrap img{display:block;max-width:100%;max-height:36vh;width:auto;height:auto;margin:0 auto;border-radius:5px;border:1.5px solid var(--line)}
+  .heatwrap figcaption{font-size:12.5px;color:var(--mut);margin-top:5px}
+  .guess{margin-top:10px;font-size:17px;font-weight:700;display:none}
+  .guess small{font-weight:500;color:var(--mut);font-size:13px}
+
+  /* dataset panel (capture mode) */
+  .ds h3{font-size:16px;margin-bottom:10px}
+  .ds h3 b{background:var(--ink);color:var(--paper);padding:2px 8px;border-radius:4px;margin-left:6px}
+  .meter{height:12px;border-radius:6px;background:#dfe4de;overflow:hidden;margin:6px 0 3px}
+  .meter i{display:block;height:100%;width:0;background:var(--pass)}
+  .ds .num{font-family:var(--mono);font-size:13px;color:var(--mut)}
+  .ds .line{margin-bottom:14px}
+  #capNote{font-family:var(--mono);font-size:12.5px;color:var(--mut);min-height:1.2em;margin-top:6px;word-break:break-all}
+
+  /* operator confirmation */
+  .feedback p{font-size:15px;margin-bottom:10px}
+  .feedback p small{display:block;color:var(--mut);font-size:12.5px}
+  .fb{flex:1;font-size:20px;font-weight:800;padding:15px;border-radius:7px;background:var(--card)}
+  #fbGood{border:2.5px solid var(--pass);color:var(--pass)}
+  #fbBad{border:2.5px solid var(--reject);color:var(--reject)}
+  #fbGood[aria-pressed="true"]{background:var(--pass);color:#fff} #fbBad[aria-pressed="true"]{background:var(--reject);color:#fff}
+  .fb:disabled{opacity:.35;cursor:default}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .chip{border:1.5px solid var(--ink);background:var(--card);color:var(--ink);border-radius:999px;padding:8px 14px;font-size:15px;font-weight:700}
+  .chip small{font-weight:500;color:var(--mut);margin-left:6px;font-size:12px}
+  .chip.suggested{border-color:var(--amber);box-shadow:0 0 0 2px var(--amber) inset}
+  .chip[aria-pressed="true"]{background:var(--reject);border-color:var(--reject);color:#fff}
+  .chip[aria-pressed="true"] small{color:#ffe3e3}
+  #fbNote{font-family:var(--mono);font-size:12.5px;color:var(--mut);margin-top:10px;min-height:1.2em}
+
+  .foot{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px}
+  .recent{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+  .recent .lbl{font-size:13px;color:var(--mut);margin-right:6px}
+  .sq{width:16px;height:16px;border-radius:3px;background:var(--pass);position:relative}
+  .sq.reject{background:var(--reject)} .sq.unrecognised{background:var(--unrec)}
+  .sq.disagree::after{content:"";position:absolute;inset:4px;border-radius:50%;background:#fff}
+  #modelInfo{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--mut)}
+  #modelInfo.warn{color:var(--unrec)}
+
+  #err{display:none;border:2px solid var(--reject);color:var(--reject);background:var(--card);border-radius:7px;padding:10px 14px;font-size:15px}
+  @media(prefers-reduced-motion:reduce){.slab,.gauge .fill{transition:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">TULIP VISION <span>· ગુણવત્તા તપાસ</span></div>
+  <select id="sku" aria-label="SKU">
+    {% for s in skus %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+  </select>
+  <div class="tabs" role="tablist">
+    <button id="tabInspect" role="tab" aria-selected="true">તપાસ <small class="en">Inspect</small></button>
+    <button id="tabCapture" role="tab" aria-selected="false">ફોટા સંગ્રહ <small class="en">Capture</small></button>
+  </div>
+  <div id="today">—</div>
+</header>
+
+<main>
+  <section class="card cam">
+    <div class="frame nocam" id="frame">
+      <img id="live" alt="">
+      <div class="roi" id="roi"></div>
+      <div class="msg"><div id="frameMsg">જોડાઈ રહ્યું છે… <small class="en">connecting…</small></div></div>
+    </div>
+    <label class="pick" id="pick" hidden>
+      <input type="file" id="file" accept="image/*" capture="environment">
+      ફોટો લો / પસંદ કરો <small class="en">Take or choose a photo</small>
+    </label>
+
+    <div id="inspectCtl">
+      <button class="big" id="shoot">તપાસો <small class="en">Inspect · Space</small></button>
+    </div>
+    <div id="captureCtl" hidden>
+      <div class="row">
+        <button class="big good" id="capGood">બરાબર તરીકે સાચવો <small class="en">Save good · G</small></button>
+        <button class="big bad" id="capBad">ખરાબ તરીકે સાચવો <small class="en">Save defect · D</small></button>
+      </div>
+      <div class="row" style="margin-top:10px;align-items:center">
+        <label for="capType" class="hint">ખામીનો પ્રકાર <small class="en" style="display:inline">defect type</small></label>
+        <select id="capType"></select>
+        <button class="chip" id="capEmpty" style="margin-left:auto">ખાલી જિગ સાચવો <small>Save empty jig · E</small></button>
+      </div>
+    </div>
+    <div class="hint">બ્રશ જિગમાં મૂકો, હાથ ફ્રેમની બહાર રાખો, પછી બટન દબાવો.
+      <small>Place the brush in the jig, keep hands out of the frame, then press the button.</small></div>
+    <div id="err" role="alert"></div>
+  </section>
+
+  <section class="card result" id="resultPane">
+    <div class="slab" id="slab" aria-live="polite">
+      <div class="word" id="word">તૈયાર</div>
+      <div class="sub" id="sub">READY</div>
+      <div class="why" id="why"></div>
+    </div>
+    <div class="gauge" aria-hidden="true">
+      <div class="track"><div class="fill" id="fill"></div><div class="limit"></div></div>
+      <div class="labels"><span>0</span><span id="ratio">સ્કોર / મર્યાદા</span><span>2×</span></div>
+    </div>
+    <div class="guess" id="guess"></div>
+    <figure class="heatwrap" id="heatwrap">
+      <img id="heat" alt="brush head as the model saw it">
+      <figcaption id="heatCap"></figcaption>
+    </figure>
+  </section>
+
+  <section class="card ds" id="dsPane" hidden>
+    <h3>ડેટાસેટ <small class="en">saving into</small><b id="dsSku"></b></h3>
+    <div class="line">
+      <div>બરાબર ફોટા <small class="en">good images — target 300 distinct brushes</small></div>
+      <div class="meter"><i id="goodMeter"></i></div>
+      <div class="num" id="goodNum">—</div>
+    </div>
+    <div class="line">
+      <div>ખરાબ ફોટા <small class="en">defect images — every type from the reject bin</small></div>
+      <div class="num" id="defNum">—</div>
+    </div>
+    <div class="line">
+      <div>ખાલી જિગ <small class="en">empty-jig photos — 5 to 10 prove the station never passes an empty jig</small></div>
+      <div class="num" id="emptyNum">—</div>
+    </div>
+    <div class="hint">દરેક ફોટો અલગ બ્રશનો હોવો જોઈએ. <small>One photo per distinct brush — never the same brush twice.</small></div>
+    <div id="capNote"></div>
+  </section>
+
+  <section class="card feedback" id="fbPane">
+    <p>ઓપરેટર પુષ્ટિ — આ બ્રશ ખરેખર કેવું છે?
+      <small>Operator check: what is this brush really? Your answer becomes training data.</small></p>
+    <div class="row">
+      <button class="fb" id="fbGood" disabled aria-pressed="false">બ્રશ બરાબર છે</button>
+      <button class="fb" id="fbBad" disabled aria-pressed="false">બ્રશ ખરાબ છે</button>
+    </div>
+    <div class="chips" id="chips" hidden></div>
+    <div id="fbNote"></div>
+  </section>
+
+  <section class="foot">
+    <div class="recent" id="recent"><span class="lbl">છેલ્લી તપાસો <small class="en">recent</small></span></div>
+    <div id="modelInfo"></div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const S = { status:null, sku:null, mode:'inspect', camConfigured:false, camLive:false, busy:false, serverDown:false,
+            cur:null, curType:null, file:null, fileUrl:null, timer:null, retryMs:1000, polling:false,
+            fbChain:Promise.resolve() };
+const NET = 'નેટવર્ક ભૂલ — સર્વર ચાલુ છે? / Network error: is the station server running?';
+const ERR = {
+  no_model:           'આ SKU માટે મોડેલ નથી — પહેલા તાલીમ આપો. / No trained model for this SKU yet.',
+  camera_stale:       'કૅમેરા ફ્રેમ નથી આપતો — કેબલ તપાસો. / The camera is not delivering frames: check the cable.',
+  camera_frozen:      'કૅમેરા એક જ ફોટો મોકલે છે — webcam app ફરી શરૂ કરો. / The camera keeps sending the same picture: restart the webcam app or replug it.',
+  camera_unavailable: 'કૅમેરા જોડાયેલ નથી (ફરી પ્રયાસ ચાલુ) — અથવા ફોટો લો. / Camera not connected (retrying), or take a photo.',
+  no_image:           'પહેલા ફોટો પસંદ કરો. / Choose or take a photo first.',
+  bad_image:          'આ ફાઈલ ફોટો નથી. / That file is not an image.',
+  too_large:          'ફોટો બહુ મોટો છે. / The photo is too large (25 MB max).',
+  unknown_sku:        'આ SKU config.yaml માં નથી. / This SKU is not in config.yaml.',
+  not_labelable:      'આ ફોટામાં બ્રશ ઓળખાયું નથી — લેબલ જરૂરી નથી. / No brush was recognised in this frame: nothing to label.',
+  timeout:            'સર્વર જવાબ નથી આપતું — ફરી પ્રયાસ કરો. / The station did not answer in time: try again.',
+};
+const WHY = {
+  no_brush: ['બ્રશ દેખાતું નથી — જિગમાં બરાબર મૂકો અને ફરી તપાસો', 'No brush recognised: seat it in the jig and inspect again'],
+  differs:  ['ચિત્ર તાલીમથી અલગ છે — SKU, ફોકસ, પ્રકાશ, કૅમેરા તપાસો', 'Picture differs from training: check the SKU, focus, light and camera position'],
+};
+/* Gujarati and Devanagari digits typed on a phone keyboard -> ASCII */
+const asciiDigits = s => s.replace(/[\u0AE6-\u0AEF]/g, c => String(c.charCodeAt(0) - 0x0AE6))
+                          .replace(/[\u0966-\u096F]/g, c => String(c.charCodeAt(0) - 0x0966)).trim();
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const store = { get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } },
+                set(k, v){ try { localStorage.setItem(k, v); } catch(e){} } };
+
+function fail(msg){ const e=$('err'); e.textContent=msg; e.style.display='block'; }
+function clearFail(){ $('err').style.display='none'; }
+
+function askPin(){
+  const p = window.prompt('સ્ટેશન PIN દાખલ કરો / Enter the station PIN');
+  if(!p) return false;
+  const pin = asciiDigits(p);
+  if(!/^[\x20-\x7e]+$/.test(pin)){ window.alert('PIN: માત્ર અંકો / digits only'); return false; }
+  store.set('tv.pin', pin);
+  return true;
+}
+async function api(url, opts = {}, retried = false, timeoutMs = 10000){
+  const o = Object.assign({}, opts);
+  if(o.method === 'POST') o.headers = Object.assign({}, opts.headers || {}, {'X-Station-Pin': store.get('tv.pin') || '-'});
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeoutMs);
+  o.signal = ctl.signal;
+  let r;
+  try { r = await fetch(url, o); }
+  catch(e){
+    if(e.name === 'AbortError') throw new Error(ERR.timeout);
+    if(e.name === 'TypeError' && o.method === 'POST' && /header/i.test(e.message || '') && !retried){
+      store.set('tv.pin', '');          /* a PIN the browser cannot send: ask again */
+      if(askPin()) return api(url, opts, true, timeoutMs);
+    }
+    throw new Error(NET);
+  }
+  finally { clearTimeout(timer); }
+  let j = null; try { j = await r.json(); } catch(e) {}
+  if(r.status === 401 && j && j.code === 'bad_pin' && !retried){
+    if(askPin()) return api(url, opts, true, timeoutMs);
+  }
+  if(!r.ok){
+    if(j && j.code === 'frame_mismatch') throw new Error('ફોટાનું માપ મોડેલ સાથે મેળ ખાતું નથી / ' + j.error);
+    throw new Error((j && ERR[j.code]) || ('ભૂલ / Error: ' + ((j && j.error) || r.status)));
+  }
+  return j;
+}
+const skuInfo = () => (S.status && S.status.skus.find(s => s.id === S.sku)) || null;
+
+/* ---------------- frame: live camera, chosen photo, or a message ---------------- */
+function frameMessage(gu, en){
+  $('frameMsg').innerHTML = esc(gu) + '<br><small class="en">' + esc(en) + '</small>';
+  $('frame').classList.add('nocam');
+}
+function showImage(src){
+  const img = $('live');
+  img.onload = () => { if(img.naturalWidth) $('frame').style.setProperty('--ar', img.naturalWidth + '/' + img.naturalHeight); };
+  img.onerror = null;
+  img.src = src;
+  $('frame').classList.remove('nocam');
+}
+function updatePicker(){
+  $('pick').hidden = S.camConfigured && S.camLive;   /* photo fallback whenever the camera is not live */
+}
+function cameraTrouble(){
+  const cam = (S.status && S.status.camera) || {};
+  if(cam.frozen) return frameMessage('કૅમેરા એક જ ફોટો મોકલે છે — webcam app ફરી શરૂ કરો',
+                                     'Camera feed frozen: restart the webcam app or replug the cable');
+  frameMessage('કૅમેરા ફ્રેમ નથી — કેબલ / webcam app તપાસો',
+               'Camera not delivering frames' + (cam.error ? ': ' + cam.error : ': check the cable or the webcam app'));
+}
+function startPreview(){
+  clearTimeout(S.timer);
+  if(!S.camConfigured || document.hidden) return;
+  if(S.file){ S.timer = setTimeout(startPreview, 500); return; }   /* a chosen photo is on screen */
+  const img = $('live');
+  img.onload = () => {
+    if(img.naturalWidth) $('frame').style.setProperty('--ar', img.naturalWidth + '/' + img.naturalHeight);
+    $('frame').classList.remove('nocam');
+    if(!S.camLive){ S.camLive = true; updatePicker(); }
+    S.timer = setTimeout(startPreview, 220);
+  };
+  img.onerror = () => {
+    if(S.camLive){ S.camLive = false; updatePicker(); }
+    cameraTrouble();
+    S.timer = setTimeout(startPreview, 1500);
+  };
+  img.src = '/api/camera/frame.jpg?t=' + Date.now();
+}
+document.addEventListener('visibilitychange', () => { if(!document.hidden) startPreview(); });
+$('file').addEventListener('change', e => {
+  const f = e.target.files[0];
+  e.target.blur();                       /* so Space inspects instead of reopening the chooser */
+  if(!f) return;
+  if(S.fileUrl) URL.revokeObjectURL(S.fileUrl);
+  S.file = f; S.fileUrl = URL.createObjectURL(f);
+  showImage(S.fileUrl);
+});
+function clearPhoto(){
+  S.file = null; $('file').value = '';
+  if(S.fileUrl){ URL.revokeObjectURL(S.fileUrl); S.fileUrl = null; }
+  if(S.camConfigured) startPreview();
+  else frameMessage('આગલો ફોટો લો', 'Take the next photo');
+}
+
+function drawRoi(){
+  const box = $('roi'), info = skuInfo();
+  const roi = info && info.model && info.model.roi;
+  if(!roi){ box.style.display='none'; return; }
+  Object.assign(box.style, { display:'block', left:roi[0]*100+'%', top:roi[1]*100+'%',
+    width:(roi[2]-roi[0])*100+'%', height:(roi[3]-roi[1])*100+'%' });
+}
+
+/* ---------------- status: retried until the server answers, then refreshed ---------------- */
+function schedulePoll(){        /* every 15 s; every 3 s while the server is unreachable */
+  clearTimeout(S.pollTimer);
+  S.pollTimer = setTimeout(() => { if(document.hidden) schedulePoll(); else loadStatus(); },
+                           S.serverDown ? 3000 : 15000);
+}
+async function loadStatus(){
+  try { S.status = await api('/api/status'); }
+  catch(e){
+    S.serverDown = true;
+    fail('સર્વર સાથે સંપર્ક નથી — ફરી પ્રયાસ… / Cannot reach the station server, retrying…');
+    if(S.polling) schedulePoll();
+    else { S.retryMs = Math.min(10000, S.retryMs * 1.6); setTimeout(loadStatus, S.retryMs); }
+    return;
+  }
+  if(S.serverDown){ S.serverDown = false; clearFail(); }
+  const first = !S.polling;
+  if(first){
+    clearFail();
+    S.polling = true;
+    const sel = $('sku'), saved = store.get('tv.sku');
+    if(saved && [...sel.options].some(o => o.value === saved)) sel.value = saved;
+    else { const trained = S.status.skus.find(s => s.model); if(trained) sel.value = trained.id; }
+  }
+  const cam = S.status.camera || {};
+  const wasConfigured = S.camConfigured;
+  S.camConfigured = !!cam.configured;
+  if(!S.camConfigured){
+    S.camLive = false;
+    if(!S.file) frameMessage('કૅમેરા જોડાયેલ નથી — નીચેથી ફોટો લો', 'No camera on this station: take or choose a photo below');
+  } else if(!wasConfigured || !S.camLive){
+    startPreview();
+  }
+  updatePicker();
+  if(first) onSku(); else refreshInfo();
+  schedulePoll();
+}
+
+function refreshInfo(){
+  const info = skuInfo(), m = info && info.model, cam = (S.status && S.status.camera) || {};
+  const camTxt = cam.configured ? (cam.label || ('camera: ' + (cam.error || 'not ready'))) : 'upload mode';
+  let txt = (m ? `model ${m.version} · limit ${m.threshold.toFixed(3)}${m.has_classifier ? ' · types' : ''}` : 'no model yet');
+  const warn = info && info.model_error;
+  $('modelInfo').textContent = (warn ? '⚠ ' + warn + ' · ' : '') + txt + ' · ' + camTxt;
+  $('modelInfo').className = warn ? 'warn' : '';
+  drawRoi();
+}
+
+function onSku(){
+  S.sku = $('sku').value;
+  store.set('tv.sku', S.sku);
+  const info = skuInfo();
+  const types = (info && info.defect_types) || [];
+  $('capType').innerHTML = types.map(t => `<option value="${esc(t.key)}">${esc(t.gu)} · ${esc(t.en)}</option>`).join('');
+  $('dsSku').textContent = info ? info.name : S.sku;
+  refreshInfo(); resetResult(); refreshStats(); refreshRecent();
+  if(S.mode === 'capture') refreshCounts();
+}
+
+function setMode(mode){
+  S.mode = mode;
+  $('tabInspect').setAttribute('aria-selected', mode === 'inspect');
+  $('tabCapture').setAttribute('aria-selected', mode === 'capture');
+  $('inspectCtl').hidden = mode !== 'inspect';
+  $('captureCtl').hidden = mode !== 'capture';
+  $('resultPane').hidden = mode !== 'inspect';
+  $('fbPane').hidden = mode !== 'inspect';
+  $('dsPane').hidden = mode !== 'capture';
+  clearFail(); resetResult();          /* an old verdict must never be labelled after a mode switch */
+  if(mode === 'capture') refreshCounts();
+}
+
+/* ---------------- inspect ---------------- */
+function setSlab(state, word, sub){
+  $('slab').className = 'slab ' + state; $('word').textContent = word; $('sub').textContent = sub;
+}
+function resetResult(){
+  setSlab('', 'તૈયાર', 'READY');
+  S.curType = null;
+  $('fill').style.width = '0'; $('ratio').textContent = 'સ્કોર / મર્યાદા';
+  $('heatwrap').style.display = 'none'; $('guess').style.display = 'none';
+  S.cur = null;
+  for(const b of [$('fbGood'), $('fbBad')]){ b.disabled = true; b.setAttribute('aria-pressed','false'); }
+  $('chips').hidden = true; $('chips').innerHTML = ''; $('fbNote').textContent = '';
+}
+function lockControls(on){
+  for(const id of ['shoot','capGood','capBad','capEmpty','sku','tabInspect','tabCapture']) $(id).disabled = on;
+}
+
+async function inspect(){
+  if(S.busy || S.mode !== 'inspect') return;
+  clearFail();
+  const useFile = !!S.file;
+  if(!useFile && !S.camConfigured){ fail(ERR.no_image); return; }
+  S.busy = true; lockControls(true);
+  resetResult(); setSlab('', 'તપાસ ચાલુ…', 'CHECKING');
+  const fd = new FormData(); fd.append('sku', S.sku);
+  if(useFile) fd.append('image', S.file, S.file.name || 'photo.jpg');
+  try {
+    const j = await api('/api/inspect', { method:'POST', body:fd }, false, 20000);
+    S.cur = j;
+    showResult(j);
+    if(useFile) clearPhoto();
+    refreshStats(); refreshRecent();
+  } catch(e){ fail(e.message); setSlab('', 'તૈયાર', 'READY'); }
+  finally { S.busy = false; lockControls(false); }
+}
+
+function showResult(j){
+  if(j.verdict === 'unrecognised'){
+    setSlab('unrecognised', 'ઓળખાયું નથી', 'NOT RECOGNISED');
+    const why = WHY[j.unrecognised_reason] || WHY.no_brush;
+    $('why').innerHTML = esc(why[0]) + '<br><small>' + esc(why[1]) + '</small>';
+    $('fill').style.width = '100%'; $('fill').style.background = 'var(--unrec)';
+    $('ratio').textContent = `${j.latency_ms} ms`;
+    $('heatCap').textContent = 'કૅમેરાએ આ જોયું · what the camera saw';
+  } else {
+    const ok = j.verdict === 'pass';
+    setSlab(ok ? 'pass' : 'reject', ok ? 'બરાબર' : 'ખરાબ', ok ? 'PASS' : 'REJECT');
+    $('fill').style.width = Math.min(100, j.ratio * 50) + '%';
+    $('fill').style.background = ok ? 'var(--pass)' : 'var(--reject)';
+    $('ratio').textContent = `${j.ratio.toFixed(2)}× મર્યાદા · ${j.latency_ms} ms`;
+    $('heatCap').textContent = 'લાલ = સામાન્ય બ્રશથી અલગ ભાગ · red = where it differs from good production; yellow box = worst spot';
+    $('fbGood').disabled = $('fbBad').disabled = false;
+    if(!ok) showChips();               /* rejects: the defect type is one tap (or 1-9) away */
+  }
+  $('heat').src = 'data:image/jpeg;base64,' + j.heatmap; $('heatwrap').style.display = 'block';
+  if(j.defect_guess){
+    const g = j.defect_guess;
+    $('guess').innerHTML = `સંભવિત: ${esc(g.gu)} <small>likely ${esc(g.en)} · ${Math.round(g.confidence*100)}%</small>`;
+    $('guess').style.display = 'block';
+  }
+}
+
+/* ---------------- operator feedback: always tied to the inspection it answers ---------------- */
+function sendFeedback(label, type){
+  const cur = S.cur;
+  if(!cur || cur.verdict === 'unrecognised') return;
+  S.fbChain = S.fbChain.then(async () => {      /* sent in tap order, so the last tap wins */
+    try {
+      const j = await api('/api/feedback', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ id:cur.id, label, defect_type:type || null }) });
+      if(!S.cur || S.cur.id !== cur.id) return;  /* operator moved on; the label is saved for its own brush */
+      S.curType = label === 'defect' ? (type || null) : null;
+      $('fbGood').setAttribute('aria-pressed', label === 'good');
+      $('fbBad').setAttribute('aria-pressed', label === 'defect');
+      for(const c of $('chips').children) c.setAttribute('aria-pressed', label === 'defect' && c.dataset.key === type);
+      $('fbNote').textContent = 'નોંધાયું / recorded · ' + (j.model_agreed ? 'model agreed' : 'model disagreed: saved for retraining')
+                                + (label === 'defect' && !type ? ' · pick a type below' : '');
+      refreshStats(); refreshRecent();
+    } catch(e){ if(S.cur && S.cur.id === cur.id) fail(e.message); }
+  });
+}
+function showChips(){
+  const info = skuInfo(), types = (info && info.defect_types) || [];
+  if(!types.length || !$('chips').hidden) return;
+  const guess = S.cur && S.cur.defect_guess && S.cur.defect_guess.key;
+  $('chips').innerHTML = types.map((t, i) =>
+    `<button class="chip${t.key === guess ? ' suggested' : ''}" data-key="${esc(t.key)}" aria-pressed="false">` +
+    `${esc(t.gu)}<small>${i < 9 ? (i+1) + ' · ' : ''}${esc(t.en)}</small></button>`).join('');
+  $('chips').hidden = false;
+}
+$('chips').addEventListener('click', e => {
+  const c = e.target.closest('.chip'); if(c) sendFeedback('defect', c.dataset.key);
+});
+
+/* ---------------- capture mode ---------------- */
+async function capture(label){
+  if(S.busy || S.mode !== 'capture') return;
+  clearFail();
+  const useFile = !!S.file;
+  if(!useFile && !S.camConfigured){ fail(ERR.no_image); return; }
+  S.busy = true; lockControls(true);
+  const fd = new FormData(); fd.append('sku', S.sku); fd.append('label', label);
+  if(label === 'defect' && $('capType').value) fd.append('defect_type', $('capType').value);
+  if(useFile) fd.append('image', S.file, S.file.name || 'photo.jpg');
+  try {
+    const j = await api('/api/capture', { method:'POST', body:fd }, false, 20000);
+    $('capNote').textContent = 'સાચવ્યું / saved: ' + j.file;
+    showCounts(j.counts);
+    if(useFile) clearPhoto();
+  } catch(e){ fail(e.message); }
+  finally { S.busy = false; lockControls(false); }
+}
+function showCounts(c){
+  $('goodNum').textContent = `${c.good} / 300`;
+  $('goodMeter').style.width = Math.min(100, c.good / 3) + '%';
+  $('defNum').textContent = String(c.defect);
+  $('emptyNum').textContent = String(c.empty ?? 0);
+}
+async function refreshCounts(){
+  try { showCounts(await api('/api/capture/counts?sku=' + encodeURIComponent(S.sku))); } catch(e) {}
+}
+
+/* ---------------- stats + recent ---------------- */
+async function refreshStats(){
+  if(!S.sku) return;
+  try {
+    const j = await api('/api/stats?sku=' + encodeURIComponent(S.sku));
+    let t = `આજે ${j.inspections} તપાસ · ${j.rejects} રિજેક્ટ`;
+    if(j.model_operator_agreement !== null) t += ` · સહમતિ ${Math.round(j.model_operator_agreement*100)}%`;
+    $('today').textContent = t;
+  } catch(e) { /* stats are decoration; never block the line */ }
+}
+async function refreshRecent(){
+  if(!S.sku) return;
+  try {
+    const rows = await api('/api/recent?limit=24&sku=' + encodeURIComponent(S.sku));
+    const box = $('recent');
+    box.querySelectorAll('.sq').forEach(n => n.remove());
+    rows.slice().reverse().forEach(r => {
+      const d = document.createElement('div');
+      const dis = r.operator_label && ((r.operator_label === 'good') !== (r.verdict === 'pass'));
+      d.className = 'sq ' + r.verdict + (dis ? ' disagree' : '');
+      d.title = `${r.ts.slice(11)} · ${r.verdict} · ${(r.score / r.threshold).toFixed(2)}×` +
+                (r.operator_label ? ` · operator: ${r.operator_label}` : '');
+      box.appendChild(d);
+    });
+  } catch(e) {}
+}
+
+/* ---------------- wiring ---------------- */
+$('shoot').addEventListener('click', inspect);
+$('fbGood').addEventListener('click', () => sendFeedback('good'));
+$('fbBad').addEventListener('click', () => { sendFeedback('defect', S.curType); showChips(); });   /* keeps a chosen type */
+$('capGood').addEventListener('click', () => capture('good'));
+$('capBad').addEventListener('click', () => capture('defect'));
+$('capEmpty').addEventListener('click', () => capture('empty'));
+$('sku').addEventListener('change', e => { e.target.blur(); onSku(); });   /* keys must not reach the dropdown */
+$('capType').addEventListener('change', e => e.target.blur());
+$('tabInspect').addEventListener('click', () => setMode('inspect'));
+$('tabCapture').addEventListener('click', () => setMode('capture'));
+const SHORTCUT = /^(Space|KeyG|KeyD|KeyE|Digit[1-9]|Numpad[1-9])$/;
+document.addEventListener('keydown', e => {
+  if(e.ctrlKey || e.metaKey || e.altKey) return;
+  const a = document.activeElement;
+  if(a && (a.tagName === 'SELECT' || (a.tagName === 'INPUT' && a.type === 'file'))){
+    if(!SHORTCUT.test(e.code)) return;                 /* arrows etc. still work in the dropdown */
+    e.preventDefault(); a.blur();                      /* no type-ahead SKU switch, no file dialog */
+  } else if(a && ['INPUT','TEXTAREA'].includes(a.tagName)) return;
+  if(e.repeat){ e.preventDefault(); return; }          /* a held key is one press, not a burst */
+  if(e.code === 'Space'){ if(S.mode === 'inspect'){ e.preventDefault(); inspect(); } return; }
+  if(S.mode === 'capture' && e.code === 'KeyG'){ e.preventDefault(); capture('good'); return; }   /* physical keys: */
+  if(S.mode === 'capture' && e.code === 'KeyD'){ e.preventDefault(); capture('defect'); return; } /* work in Gujarati layout too */
+  if(S.mode === 'capture' && e.code === 'KeyE'){ e.preventDefault(); capture('empty'); return; }
+  const m = /^(Digit|Numpad)([1-9])$/.exec(e.code);
+  if(m && S.mode === 'inspect' && !$('chips').hidden){
+    const c = $('chips').children[Number(m[2]) - 1];
+    if(c){ e.preventDefault(); sendFeedback('defect', c.dataset.key); }
+  }
+});
+loadStatus();
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# factory imagery, trained weights and the audit log stay on the factory machines
+data/
+models/
+serve/data/
+out/
