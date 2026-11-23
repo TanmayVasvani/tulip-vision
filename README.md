@@ -14,6 +14,13 @@ inspection PC, a tablet or any phone on the network.
 ![Operator station rejecting a brush with a stray bristle](docs/station.png)
 <sub>Operator station on the synthetic demo SKU: verdict, score against the limit, heatmap with the worst spot boxed, likely defect type, one-tap confirmation.</sub>
 
+## Status
+
+Tulip Vision is in use at Tulip Enterprise. The production images and
+results are private for business reasons. The figures in this README come
+from the synthetic demo in this repository, which lets anyone run the
+pipeline without that data.
+
 ---
 
 ## How it works
@@ -180,8 +187,8 @@ limit, which is exactly what the report is for.
 ![Heatmaps on planted defects](docs/heatmaps.jpg)
 <sub>Missing, sparse and splayed tuft (top); a splayed tuft the model missed at 0.94× the limit, a stray bristle, contamination (bottom).</sub>
 
-The pipeline runs end to end on this demo. Accuracy on real Tulip brushes
-comes only from step 4 on rig photos.
+The pipeline runs end to end on this demo. Results on real Tulip brushes
+are kept at the factory and are not published here.
 
 ## The operator station
 
